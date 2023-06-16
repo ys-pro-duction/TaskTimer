@@ -1,0 +1,215 @@
+package com.ys_production.tasktimer
+
+import android.content.ContentProvider
+import android.content.ContentValues
+import android.content.UriMatcher
+import android.database.Cursor
+import android.database.sqlite.SQLiteQueryBuilder
+import android.net.Uri
+import android.util.Log
+
+private const val TAG = "AppProvider"
+const val CONTENT_AUTHORITY = "com.ys_production.tasktimer.provider"
+private const val TASKS = 100
+private const val TASKS_ID = 101
+private const val TIMINGS = 200
+private const val TIMINGS_ID = 201
+private const val TASK_DURATION = 400
+private const val TASK_DURATION_ID = 401
+val CONTENT_AUTHORITY_URI: Uri = Uri.parse("content://$CONTENT_AUTHORITY")
+
+class AppProvider : ContentProvider() {
+    private val uriMatcher by lazy { buildUriMatcher() }
+    private fun buildUriMatcher(): UriMatcher {
+        Log.d(TAG, "buildUriMatcher: start")
+        val matcher = UriMatcher(UriMatcher.NO_MATCH)
+        // e.g. content://com.ys_production.tasktimer.provider/Tasks
+        matcher.addURI(CONTENT_AUTHORITY, TasksContract.TABLE_NAME, TASKS)
+        // e.g. content://com.ys_production.tasktimer.provider/Tasks/8
+        matcher.addURI(CONTENT_AUTHORITY, TasksContract.TABLE_NAME + "/#", TASKS_ID)
+        // e.g. content://com.ys_production.tasktimer.provider/Timings
+        matcher.addURI(CONTENT_AUTHORITY, TimingsContract.TABLE_NAME, TIMINGS)
+        // e.g. content://com.ys_production.tasktimer.provider/Timings/8
+        matcher.addURI(CONTENT_AUTHORITY, TimingsContract.TABLE_NAME + "/#", TIMINGS_ID)
+        return matcher
+    }
+
+    override fun onCreate(): Boolean {
+        Log.d(TAG, "onCreate: start")
+        return true
+    }
+
+    override fun query(
+        uri: Uri,
+        projection: Array<out String>?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+        sortOrder: String?,
+    ): Cursor? {
+        Log.d(TAG, "query: start query uri: $uri")
+        val match = uriMatcher.match(uri)
+        val queryBuilder = SQLiteQueryBuilder()
+        when (match) {
+            TASKS -> {
+                queryBuilder.tables = TasksContract.TABLE_NAME
+            }
+
+            TASKS_ID -> {
+                queryBuilder.tables = TasksContract.TABLE_NAME
+                val id = TasksContract.getId(uri)
+                queryBuilder.appendWhere("${TasksContract.Columns.ID} = ")
+                queryBuilder.appendWhereEscapeString("$id")
+            }
+
+            TIMINGS -> {
+                queryBuilder.tables = TimingsContract.TABLE_NAME
+            }
+
+            TIMINGS_ID -> {
+                queryBuilder.tables = TimingsContract.TABLE_NAME
+                val id = TimingsContract.getId(uri)
+                queryBuilder.appendWhere("${TimingsContract.Columns.ID} = ")
+                queryBuilder.appendWhereEscapeString("$id")
+            }
+
+            else -> throw IllegalStateException("unknown uri: $uri")
+        }
+        val db = context?.let { AppDatabase.getInstance(it).readableDatabase }
+        val cursor =
+            queryBuilder.query(db, projection, selection, selectionArgs, null, null, sortOrder)
+        Log.d(TAG, "query cursor count: ${cursor.count}")
+        return cursor
+    }
+
+    override fun getType(uri: Uri): String {
+        return when (uriMatcher.match(uri)) {
+            TASKS -> TasksContract.CONTENT_TYPE
+            TASKS_ID -> TasksContract.CONTENT_ITEM_TYPE
+            TIMINGS -> TimingsContract.CONTENT_TYPE
+            TIMINGS_ID -> TimingsContract.CONTENT_ITEM_TYPE
+            else -> throw IllegalStateException("error in gettype uri: $uri")
+        }
+    }
+
+    override fun insert(uri: Uri, values: ContentValues?): Uri? {
+        Log.d(TAG, "insert: start insert uri: $uri")
+        val match = uriMatcher.match(uri)
+        var returnId: Long = -1
+        val returnUri: Uri
+        when (match) {
+            TASKS -> {
+                context?.let {
+                    val db = AppDatabase.getInstance(it).writableDatabase
+                    returnId = db.insert(TasksContract.TABLE_NAME, null, values)
+                    returnUri =  TasksContract.getUriFromId(returnId)
+                }
+            }
+
+            TIMINGS -> {
+                context?.let {
+                    val db = AppDatabase.getInstance(it).writableDatabase
+                    returnId = db.insert(TimingsContract.TABLE_NAME, null, values)
+                    returnUri = TimingsContract.getUriFromId(returnId)
+                }
+            }
+
+            else -> throw IllegalStateException("error unknown uri: $uri")
+        }
+        if (returnId == -1L){
+            throw IllegalStateException("error unknown uri: $uri")
+        }else{
+            if(returnId > 0){
+                Log.d(TAG, "insert: observer call $uri")
+                context?.contentResolver?.notifyChange(uri,null)
+            }
+        }
+        return null
+    }
+
+    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int {
+        Log.d(TAG, "delete: start delete uri: $uri")
+        val match = uriMatcher.match(uri)
+        var selectionCriteria: String
+        var rowAffected = -1
+        context?.let { context ->
+            val db = AppDatabase.getInstance(context).writableDatabase
+            when (match) {
+                TASKS -> {
+                    rowAffected = db.delete(TasksContract.TABLE_NAME, selection, selectionArgs)
+                }
+
+                TASKS_ID -> {
+                    selectionCriteria = "${TasksContract.Columns.ID} = ${TasksContract.getId(uri)}"
+                    selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                    rowAffected = db.delete(TasksContract.TABLE_NAME, selectionCriteria, selectionArgs)
+                }
+
+                TIMINGS -> {
+                    return db.delete(TimingsContract.TABLE_NAME, selection, selectionArgs)
+                }
+
+                TIMINGS_ID -> {
+                    selectionCriteria =
+                        "${TimingsContract.Columns.ID} = ${TimingsContract.getId(uri)}"
+                    selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                    return db.delete(TimingsContract.TABLE_NAME, selectionCriteria, selectionArgs)
+                }
+
+                else -> throw IllegalStateException("error on delete unknown uri: $uri")
+            }
+        }
+        if(rowAffected > 0) {
+            Log.d(TAG, "insert: observer call $uri")
+            context?.contentResolver?.notifyChange(uri, null)
+        }
+        return rowAffected
+    }
+
+    override fun update(
+        uri: Uri,
+        values: ContentValues?,
+        selection: String?,
+        selectionArgs: Array<out String>?,
+    ): Int {
+        Log.d(TAG, "update: start update uri: $uri")
+        val match = uriMatcher.match(uri)
+        var selectionCriteria: String
+        var rowAffected = -1
+        context?.let { context ->
+            val db = AppDatabase.getInstance(context).writableDatabase
+            when (match) {
+                TASKS -> {
+                    rowAffected = db.update(TasksContract.TABLE_NAME, values, selection, selectionArgs)
+                }
+
+                TASKS_ID -> {
+                    selectionCriteria = "${TasksContract.Columns.ID} = ${TasksContract.getId(uri)}"
+                    selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                    rowAffected = db.update(
+                        TasksContract.TABLE_NAME, values, selectionCriteria, selectionArgs
+                    )
+                }
+
+                TIMINGS -> {
+                    return db.update(TimingsContract.TABLE_NAME, values, selection, selectionArgs)
+                }
+
+                TIMINGS_ID -> {
+                    selectionCriteria =
+                        "${TimingsContract.Columns.ID} = ${TimingsContract.getId(uri)}"
+                    selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                    return db.update(
+                        TimingsContract.TABLE_NAME, values, selectionCriteria, selectionArgs
+                    )
+                }
+
+                else -> throw IllegalStateException("error on update unknown uri: $uri")
+            }
+        }
+        if (rowAffected > 0){
+            Log.d(TAG, "insert: observer call $uri")
+            context?.contentResolver?.notifyChange(uri,null)
+        }
+        return rowAffected
+    }
+}
