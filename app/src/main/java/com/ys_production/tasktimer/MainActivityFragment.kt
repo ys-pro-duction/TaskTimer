@@ -34,6 +34,13 @@ class MainActivityFragment : Fragment(), CursorAdapter.OnTaskClickListener {
             val cursor = adapter.swapCursor(it)
             CoroutineScope(Dispatchers.Default).launch { cursor?.close() }
         }
+        viewModel.timing.observe(viewLifecycleOwner){
+            bindding.itemSelected.text = if (it != null){
+                getString(R.string.currently_timing,it)
+            }else{
+                getString(R.string.no_task_selected)
+            }
+        }
         return bindding.root
     }
 
@@ -53,5 +60,6 @@ class MainActivityFragment : Fragment(), CursorAdapter.OnTaskClickListener {
 
     override fun onTaskBackLongClick(task: Task) {
         Log.d(TAG, "onTaskBackLongClick: ")
+        viewModel.timeTask(task)
     }
 }

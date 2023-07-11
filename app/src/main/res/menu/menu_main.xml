@@ -9,11 +9,13 @@
         android:title="Add task"
         app:showAsAction="always" />
     <item
+        android:id="@+id/duration_report"
         android:icon="@android:drawable/ic_menu_view"
         android:orderInCategory="1"
         android:title="Duration Report"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/about_menu"
         android:icon="@android:drawable/ic_menu_info_details"
         android:orderInCategory="2"
         android:title="About Task Timer"
@@ -24,7 +26,8 @@
         android:title="@string/action_settings"
         app:showAsAction="never" />
     <item
-        android:enabled="false"
+        android:id="@+id/generate_testdate"
         android:orderInCategory="100"
-        android:title="Generate Data" />
+        android:title="Generate Data"
+        android:visible="false" />
 </menu>

@@ -14,8 +14,8 @@ private const val TASKS = 100
 private const val TASKS_ID = 101
 private const val TIMINGS = 200
 private const val TIMINGS_ID = 201
+private const val CURRENT_TIMING = 300
 private const val TASK_DURATION = 400
-private const val TASK_DURATION_ID = 401
 val CONTENT_AUTHORITY_URI: Uri = Uri.parse("content://$CONTENT_AUTHORITY")
 
 class AppProvider : ContentProvider() {
@@ -31,6 +31,8 @@ class AppProvider : ContentProvider() {
         matcher.addURI(CONTENT_AUTHORITY, TimingsContract.TABLE_NAME, TIMINGS)
         // e.g. content://com.ys_production.tasktimer.provider/Timings/8
         matcher.addURI(CONTENT_AUTHORITY, TimingsContract.TABLE_NAME + "/#", TIMINGS_ID)
+        matcher.addURI(CONTENT_AUTHORITY, CurrentTimingsContract.TABLE_NAME, CURRENT_TIMING)
+        matcher.addURI(CONTENT_AUTHORITY, DurationContract.TABLE_NAME, TASK_DURATION)
         return matcher
     }
 
@@ -71,6 +73,8 @@ class AppProvider : ContentProvider() {
                 queryBuilder.appendWhere("${TimingsContract.Columns.ID} = ")
                 queryBuilder.appendWhereEscapeString("$id")
             }
+            CURRENT_TIMING -> queryBuilder.tables = CurrentTimingsContract.TABLE_NAME
+            TASK_DURATION -> queryBuilder.tables = DurationContract.TABLE_NAME
 
             else -> throw IllegalStateException("unknown uri: $uri")
         }
@@ -87,6 +91,8 @@ class AppProvider : ContentProvider() {
             TASKS_ID -> TasksContract.CONTENT_ITEM_TYPE
             TIMINGS -> TimingsContract.CONTENT_TYPE
             TIMINGS_ID -> TimingsContract.CONTENT_ITEM_TYPE
+            CURRENT_TIMING -> CurrentTimingsContract.CONTENT_ITEM_TYPE
+            TASK_DURATION -> DurationContract.CONTENT_ITEM_TYPE
             else -> throw IllegalStateException("error in gettype uri: $uri")
         }
     }
@@ -95,7 +101,7 @@ class AppProvider : ContentProvider() {
         Log.d(TAG, "insert: start insert uri: $uri")
         val match = uriMatcher.match(uri)
         var returnId: Long = -1
-        val returnUri: Uri
+        var returnUri: Uri? = null
         when (match) {
             TASKS -> {
                 context?.let {
@@ -123,7 +129,7 @@ class AppProvider : ContentProvider() {
                 context?.contentResolver?.notifyChange(uri,null)
             }
         }
-        return null
+        return returnUri
     }
 
     override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int {
@@ -145,21 +151,21 @@ class AppProvider : ContentProvider() {
                 }
 
                 TIMINGS -> {
-                    return db.delete(TimingsContract.TABLE_NAME, selection, selectionArgs)
+                    rowAffected = db.delete(TimingsContract.TABLE_NAME, selection, selectionArgs)
                 }
 
                 TIMINGS_ID -> {
                     selectionCriteria =
                         "${TimingsContract.Columns.ID} = ${TimingsContract.getId(uri)}"
                     selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
-                    return db.delete(TimingsContract.TABLE_NAME, selectionCriteria, selectionArgs)
+                    rowAffected = db.delete(TimingsContract.TABLE_NAME, selectionCriteria, selectionArgs)
                 }
 
                 else -> throw IllegalStateException("error on delete unknown uri: $uri")
             }
         }
         if(rowAffected > 0) {
-            Log.d(TAG, "insert: observer call $uri")
+            Log.d(TAG, "delete: observer call $uri")
             context?.contentResolver?.notifyChange(uri, null)
         }
         return rowAffected
@@ -198,6 +204,7 @@ class AppProvider : ContentProvider() {
                     selectionCriteria =
                         "${TimingsContract.Columns.ID} = ${TimingsContract.getId(uri)}"
                     selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                    Log.d(TAG, "update: slectioncriteria: $selectionCriteria")
                     return db.update(
                         TimingsContract.TABLE_NAME, values, selectionCriteria, selectionArgs
                     )

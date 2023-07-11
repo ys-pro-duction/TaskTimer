@@ -22,4 +22,12 @@
     <style name="Theme.TaskTimer.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
 
     <style name="Theme.TaskTimer.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />
+    <style name="SettingsDialogStyle" parent="Theme.Material3.DayNight.Dialog.Alert">
+        <item name="windowNoTitle">false</item>
+    </style>
+  <!-- Base application theme. -->
+    <style name="Base.Theme.TaskTimer" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    </style>
 </resources>

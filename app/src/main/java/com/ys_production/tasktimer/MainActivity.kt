@@ -1,24 +1,26 @@
 package com.ys_production.tasktimer
 
+import android.app.AlertDialog
+import android.content.Intent
 import android.content.res.Configuration
 import android.os.Bundle
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.res.ResourcesCompat
 import androidx.fragment.app.Fragment
-import androidx.navigation.ui.AppBarConfiguration
 import com.ys_production.tasktimer.databinding.ActivityMainBinding
+import com.ys_production.tasktimer.debug.TaskData
 
 private const val TAG = "MainActivity"
 
 class MainActivity : AppCompatActivity(), AddEditFragment.OnSaveClicked,
-    MainActivityFragment.OnTaskEdit{
-    private lateinit var appBarConfiguration: AppBarConfiguration
+    MainActivityFragment.OnTaskEdit {
     private lateinit var binding: ActivityMainBinding
     private var mTowPane = false
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -35,7 +37,6 @@ class MainActivity : AppCompatActivity(), AddEditFragment.OnSaveClicked,
         }
         val appDatabase = AppDatabase.getInstance(this)
         val db = appDatabase.readableDatabase
-
     }
 
     override fun onBackPressed() {
@@ -76,19 +77,51 @@ class MainActivity : AppCompatActivity(), AddEditFragment.OnSaveClicked,
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.menu_main, menu)
+        if (BuildConfig.DEBUG) {
+            menu.findItem(R.id.generate_testdate).isVisible = true
+        }
         return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         when (item.itemId) {
             R.id.add_task -> taskEditRequest(null)
-            R.id.action_settings -> true
+            R.id.action_settings -> {
+                showSettingsDialog()
+            }
+
+            R.id.duration_report ->{
+                startActivity(Intent(this,DurationsReport::class.java))
+            }
             android.R.id.home -> {
                 supportFragmentManager.findFragmentById(R.id.task_detail_container)
                     ?.let { goBack(it) }
             }
+
+            R.id.about_menu -> {
+                showAboutDialog()
+            }
+
+            R.id.generate_testdate -> TaskData.generateRandomTestData(contentResolver)
         }
         return super.onOptionsItemSelected(item)
+    }
+
+    private fun showSettingsDialog() {
+        val settingsDialog = SettingsDialog()
+        settingsDialog.show(supportFragmentManager, null)
+    }
+
+    private fun showAboutDialog() {
+        with(AlertDialog.Builder(this)) {
+            setTitle("About")
+            setIcon(ResourcesCompat.getDrawable(resources, R.mipmap.ic_launcher, null))
+            setView(layoutInflater.inflate(R.layout.about_dialog, null, false).apply {
+                    this.findViewById<TextView>(R.id.about_dialog_version_txt).text =
+                        BuildConfig.VERSION_NAME
+                })
+            create().show()
+        }
     }
 
     private fun taskEditRequest(task: Task?) {
