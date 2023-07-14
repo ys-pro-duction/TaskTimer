@@ -14,7 +14,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
@@ -24,9 +24,11 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
     private val databaseCursor = MutableLiveData<Cursor>()
     val cursor: LiveData<Cursor> get() = databaseCursor
     private var currentTiming: Timing? = null
-    private val taskTiming = MutableLiveData<String>()
-    val timing: LiveData<String?>
-        get() = taskTiming
+    private val taskTiming = MutableLiveData<String?>()
+    val optionsMenu = MutableLiveData(true)
+    val timing: LiveData<String?> get() = taskTiming
+    var editedTaskId = 0L
+        private set
 
     private val cursorObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
         override fun onChange(selfChange: Boolean, uri: Uri?) {
@@ -48,6 +50,17 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
                     ignoreLessThan =
                         sharedPreferences.getInt(key, SETTINGS_DEFALUT_IGNORE_LESS_THAN)
                     Log.d(TAG, "settingsListener: ignoreLessThan: $ignoreLessThan")
+                    val value = ContentValues()
+                    value.put(ParametersContract.Column.VALUE, ignoreLessThan)
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val uri = application.contentResolver.update(
+                            ParametersContract.getUriFromId(ParametersContract.ID_SHORT_TIMING),
+                            value,
+                            null,
+                            null
+                        )
+                        Log.d(TAG, "settingsListener: uri: $uri")
+                    }
                 }
             }
         }
@@ -68,9 +81,8 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
             TasksContract.Columns.TASK_DESCRIPTION,
             TasksContract.Columns.TASK_SHORT_ORDER
         )
-        val shortOrder =
-            "${TasksContract.Columns.TASK_SHORT_ORDER},${TasksContract.Columns.TASK_NAME}"
-        CoroutineScope(Dispatchers.Default).launch {
+        val shortOrder = "${TasksContract.Columns.TASK_SHORT_ORDER},${TasksContract.Columns.TASK_NAME} COLLATE NOCASE"
+        viewModelScope.launch(Dispatchers.IO) {
             val cursor = getApplication<Application>().contentResolver.query(
                 TasksContract.CONTENT_URI, projection, null, null, shortOrder
             )
@@ -87,12 +99,12 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
         } else {
             timingRecord.setDuration()
             saveTiming(timingRecord)
-            if (task.id == timingRecord.taskId) {
-                currentTiming = null
+            currentTiming = if (task.id == timingRecord.taskId) {
+                null
             } else {
                 val newTiming = Timing(task.id)
                 saveTiming(newTiming)
-                currentTiming = newTiming
+                newTiming
             }
         }
         taskTiming.value = if (currentTiming != null) task.name else null
@@ -108,7 +120,7 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
             }
             put(TimingsContract.Columns.TIMING_DURATION, currentTiming.duration)
         }
-        CoroutineScope(Dispatchers.Default).launch {
+        viewModelScope.launch(Dispatchers.IO) {
             if (inseting) {
                 Log.d(TAG, "saveTiming: inseting")
                 val uri = getApplication<Application>().contentResolver.insert(
@@ -119,22 +131,15 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
                     currentTiming.id = TimingsContract.getId(uri)
                 }
             } else {
-                if (currentTiming.duration >= ignoreLessThan) {
-                    Log.d(
-                        TAG,
-                        "saveTiming: updating:${values.getAsInteger(TimingsContract.Columns.TIMING_DURATION)}"
-                    )
-                    getApplication<Application>().contentResolver.update(
-                        TimingsContract.getUriFromId(
-                            currentTiming.id
-                        ), values, null, null
-                    )
-                } else {
-                    val affectedRow = getApplication<Application>().contentResolver.delete(
-                        TimingsContract.getUriFromId(currentTiming.id), null, null
-                    )
-                    Log.d(TAG, "saveTiming: deleted $affectedRow")
-                }
+                Log.d(
+                    TAG,
+                    "saveTiming: updating:${values.getAsInteger(TimingsContract.Columns.TIMING_DURATION)}"
+                )
+                getApplication<Application>().contentResolver.update(
+                    TimingsContract.getUriFromId(
+                        currentTiming.id
+                    ), values, null, null
+                )
             }
         }
     }
@@ -147,7 +152,7 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
             value.put(TasksContract.Columns.TASK_DESCRIPTION, task.description)
             value.put(TasksContract.Columns.TASK_SHORT_ORDER, task.shortOrder)
             if (task.id == 0) {
-                CoroutineScope(Dispatchers.Default).launch {
+                viewModelScope.launch(Dispatchers.IO) {
                     val uri = getApplication<Application>().contentResolver.insert(
                         TasksContract.CONTENT_URI, value
                     )
@@ -156,7 +161,7 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
             } else {
-                CoroutineScope(Dispatchers.Default).launch {
+                viewModelScope.launch(Dispatchers.IO) {
                     getApplication<Application>().contentResolver.update(
                         TasksContract.getUriFromId(
                             task.id.toLong()
@@ -168,11 +173,27 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
         return task
     }
 
+    fun startEditing(taskId: Long) {
+        if (BuildConfig.DEBUG && editedTaskId != 0L) {
+            throw IllegalStateException("startEditing called without stopping previus edit. editTaskId: $editedTaskId, taskId: $taskId")
+        } else {
+            editedTaskId = taskId
+        }
+    }
+
+    fun stopEditing() {
+        editedTaskId = 0L
+    }
+
     fun deleteTask(task: Task) {
-        CoroutineScope(Dispatchers.Default).launch {
+        viewModelScope.launch(Dispatchers.IO) {
             getApplication<Application>().contentResolver.delete(
                 TasksContract.getUriFromId(task.id.toLong()), null, null
             )
+        }
+        if (currentTiming?.taskId == task.id) {
+            currentTiming = null
+            taskTiming.value = null
         }
     }
 
@@ -203,5 +224,6 @@ class TaskTimerViewModel(application: Application) : AndroidViewModel(applicatio
         super.onCleared()
         getApplication<Application>().contentResolver.unregisterContentObserver(cursorObserver)
         settings.unregisterOnSharedPreferenceChangeListener(settingsListener)
+        databaseCursor.value?.close()
     }
 }

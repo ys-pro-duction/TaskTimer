@@ -15,7 +15,6 @@ class CursorAdapter(private var cursor: Cursor?, private val listener: OnTaskCli
 
     interface OnTaskClickListener {
         fun onEditClick(task: Task)
-        fun onDeleteClick(task: Task)
         fun onTaskBackLongClick(task: Task)
     }
 
@@ -30,24 +29,25 @@ class CursorAdapter(private var cursor: Cursor?, private val listener: OnTaskCli
         if (cursor == null || cursor.count == 0) {
             holder.title.setText(R.string.instructions_header)
             holder.des.setText(R.string.instruction)
-            holder.delete.visibility = View.GONE
             holder.edit.visibility = View.GONE
-        }else {
+        } else {
             if (!cursor.moveToPosition(position)) throw Exception("cursor not move to position $position")
             val task = getTaskFromCursor(cursor)
-            holder.binddata(task, listener)
+            holder.bindData(task, listener)
         }
     }
 
     @SuppressLint("Range")
     private fun getTaskFromCursor(cursor: Cursor): Task {
-        val task = Task(
-            cursor.getString(cursor.getColumnIndex(TasksContract.Columns.TASK_NAME)),
-            cursor.getString(cursor.getColumnIndex(TasksContract.Columns.TASK_DESCRIPTION)),
-            cursor.getInt(cursor.getColumnIndex(TasksContract.Columns.TASK_SHORT_ORDER))
-        )
-        task.id = cursor.getInt(cursor.getColumnIndex(TasksContract.Columns.ID))
-        return task
+        with(cursor) {
+            val task = Task(
+                getString(getColumnIndex(TasksContract.Columns.TASK_NAME)),
+                getString(getColumnIndex(TasksContract.Columns.TASK_DESCRIPTION)),
+                getInt(getColumnIndex(TasksContract.Columns.TASK_SHORT_ORDER))
+            )
+            task.id = getInt(getColumnIndex(TasksContract.Columns.ID))
+            return task
+        }
     }
 
     fun swapCursor(newCursor: Cursor?): Cursor? {
@@ -65,19 +65,15 @@ class CursorAdapter(private var cursor: Cursor?, private val listener: OnTaskCli
 }
 
 class CursorViewHolder(private val view: View) : RecyclerView.ViewHolder(view) {
-    val title = view.findViewById<TextView>(R.id.tli_title)
-    val des = view.findViewById<TextView>(R.id.tli_description)
-    val delete = view.findViewById<ImageButton>(R.id.tli_delete_btn)
-    val edit = view.findViewById<ImageButton>(R.id.tli_edit_btn)
-    fun binddata(task: Task, listener: CursorAdapter.OnTaskClickListener) {
+    val title: TextView = view.findViewById(R.id.tli_title)
+    val des: TextView = view.findViewById(R.id.tli_description)
+    val edit: ImageButton = view.findViewById(R.id.tli_edit_btn)
+    lateinit var task: Task
+    fun bindData(task: Task, listener: CursorAdapter.OnTaskClickListener) {
+        this.task = task
         title.text = task.name
         des.text = task.description
-        delete.visibility = View.VISIBLE
         edit.visibility = View.VISIBLE
-        delete.setOnClickListener {
-            Log.d(TAG, "binddata: delete click ${task.name}")
-            listener.onDeleteClick(task)
-        }
         edit.setOnClickListener {
             Log.d(TAG, "binddata: edit click ${task.name}")
             listener.onEditClick(task)

@@ -69,4 +69,6 @@
     <string name="delete_ask_title">Delete?</string>
     <string name="delete_ask_message">"Are you sure you want to delete all timings before %1$s"</string>
     <string name="rm_title_change_settings">Change Settings</string>
+    <string name="delete_task_massage">Deleting will also delete all timing data associated with %1$s</string>
+    <string name="can_not_delete_toast">You can\'t delete task that being edited</string>
 </resources>

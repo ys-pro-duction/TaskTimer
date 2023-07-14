@@ -16,6 +16,8 @@ private const val TIMINGS = 200
 private const val TIMINGS_ID = 201
 private const val CURRENT_TIMING = 300
 private const val TASK_DURATION = 400
+private const val PARAMETERS = 500
+private const val PARAMETER_ID = 500
 val CONTENT_AUTHORITY_URI: Uri = Uri.parse("content://$CONTENT_AUTHORITY")
 
 class AppProvider : ContentProvider() {
@@ -33,6 +35,8 @@ class AppProvider : ContentProvider() {
         matcher.addURI(CONTENT_AUTHORITY, TimingsContract.TABLE_NAME + "/#", TIMINGS_ID)
         matcher.addURI(CONTENT_AUTHORITY, CurrentTimingsContract.TABLE_NAME, CURRENT_TIMING)
         matcher.addURI(CONTENT_AUTHORITY, DurationContract.TABLE_NAME, TASK_DURATION)
+        matcher.addURI(CONTENT_AUTHORITY, ParametersContract.TABLE_NAME, PARAMETERS)
+        matcher.addURI(CONTENT_AUTHORITY, ParametersContract.TABLE_NAME + "/#", PARAMETER_ID)
         return matcher
     }
 
@@ -73,12 +77,23 @@ class AppProvider : ContentProvider() {
                 queryBuilder.appendWhere("${TimingsContract.Columns.ID} = ")
                 queryBuilder.appendWhereEscapeString("$id")
             }
+
             CURRENT_TIMING -> queryBuilder.tables = CurrentTimingsContract.TABLE_NAME
             TASK_DURATION -> queryBuilder.tables = DurationContract.TABLE_NAME
 
+            PARAMETERS -> {
+                queryBuilder.tables = ParametersContract.TABLE_NAME
+            }
+
+            PARAMETER_ID -> {
+                queryBuilder.tables = ParametersContract.TABLE_NAME
+                val id = ParametersContract.getId(uri)
+                queryBuilder.appendWhere("${ParametersContract.Column.ID} = ")
+                queryBuilder.appendWhereEscapeString("$id")
+            }
             else -> throw IllegalStateException("unknown uri: $uri")
         }
-        val db = context?.let { AppDatabase.getInstance(it).readableDatabase }
+        val db = AppDatabase.getInstance(context!!).readableDatabase
         val cursor =
             queryBuilder.query(db, projection, selection, selectionArgs, null, null, sortOrder)
         Log.d(TAG, "query cursor count: ${cursor.count}")
@@ -93,40 +108,39 @@ class AppProvider : ContentProvider() {
             TIMINGS_ID -> TimingsContract.CONTENT_ITEM_TYPE
             CURRENT_TIMING -> CurrentTimingsContract.CONTENT_ITEM_TYPE
             TASK_DURATION -> DurationContract.CONTENT_ITEM_TYPE
+            PARAMETERS -> ParametersContract.CONTENT_TYPE
+            PARAMETER_ID -> ParametersContract.CONTENT_ITEM_TYPE
             else -> throw IllegalStateException("error in gettype uri: $uri")
         }
     }
 
-    override fun insert(uri: Uri, values: ContentValues?): Uri? {
+    override fun insert(uri: Uri, values: ContentValues?): Uri {
         Log.d(TAG, "insert: start insert uri: $uri")
         val match = uriMatcher.match(uri)
-        var returnId: Long = -1
-        var returnUri: Uri? = null
+        val returnId: Long
+        val returnUri: Uri?
+        val context = context!!
         when (match) {
             TASKS -> {
-                context?.let {
-                    val db = AppDatabase.getInstance(it).writableDatabase
-                    returnId = db.insert(TasksContract.TABLE_NAME, null, values)
-                    returnUri =  TasksContract.getUriFromId(returnId)
-                }
+                val db = AppDatabase.getInstance(context).writableDatabase
+                returnId = db.insert(TasksContract.TABLE_NAME, null, values)
+                returnUri = TasksContract.getUriFromId(returnId)
             }
 
             TIMINGS -> {
-                context?.let {
-                    val db = AppDatabase.getInstance(it).writableDatabase
-                    returnId = db.insert(TimingsContract.TABLE_NAME, null, values)
-                    returnUri = TimingsContract.getUriFromId(returnId)
-                }
+                val db = AppDatabase.getInstance(context).writableDatabase
+                returnId = db.insert(TimingsContract.TABLE_NAME, null, values)
+                returnUri = TimingsContract.getUriFromId(returnId)
             }
 
             else -> throw IllegalStateException("error unknown uri: $uri")
         }
-        if (returnId == -1L){
+        if (returnId == -1L) {
             throw IllegalStateException("error unknown uri: $uri")
-        }else{
-            if(returnId > 0){
+        } else {
+            if (returnId > 0) {
                 Log.d(TAG, "insert: observer call $uri")
-                context?.contentResolver?.notifyChange(uri,null)
+                context.contentResolver.notifyChange(uri, null)
             }
         }
         return returnUri
@@ -136,37 +150,36 @@ class AppProvider : ContentProvider() {
         Log.d(TAG, "delete: start delete uri: $uri")
         val match = uriMatcher.match(uri)
         var selectionCriteria: String
-        var rowAffected = -1
-        context?.let { context ->
-            val db = AppDatabase.getInstance(context).writableDatabase
-            when (match) {
-                TASKS -> {
-                    rowAffected = db.delete(TasksContract.TABLE_NAME, selection, selectionArgs)
-                }
-
-                TASKS_ID -> {
-                    selectionCriteria = "${TasksContract.Columns.ID} = ${TasksContract.getId(uri)}"
-                    selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
-                    rowAffected = db.delete(TasksContract.TABLE_NAME, selectionCriteria, selectionArgs)
-                }
-
-                TIMINGS -> {
-                    rowAffected = db.delete(TimingsContract.TABLE_NAME, selection, selectionArgs)
-                }
-
-                TIMINGS_ID -> {
-                    selectionCriteria =
-                        "${TimingsContract.Columns.ID} = ${TimingsContract.getId(uri)}"
-                    selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
-                    rowAffected = db.delete(TimingsContract.TABLE_NAME, selectionCriteria, selectionArgs)
-                }
-
-                else -> throw IllegalStateException("error on delete unknown uri: $uri")
+        val rowAffected: Int
+        val context = context!!
+        val db = AppDatabase.getInstance(context).writableDatabase
+        when (match) {
+            TASKS -> {
+                rowAffected = db.delete(TasksContract.TABLE_NAME, selection, selectionArgs)
             }
+
+            TASKS_ID -> {
+                selectionCriteria = "${TasksContract.Columns.ID} = ${TasksContract.getId(uri)}"
+                selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                rowAffected = db.delete(TasksContract.TABLE_NAME, selectionCriteria, selectionArgs)
+            }
+
+            TIMINGS -> {
+                rowAffected = db.delete(TimingsContract.TABLE_NAME, selection, selectionArgs)
+            }
+
+            TIMINGS_ID -> {
+                selectionCriteria = "${TimingsContract.Columns.ID} = ${TimingsContract.getId(uri)}"
+                selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                rowAffected =
+                    db.delete(TimingsContract.TABLE_NAME, selectionCriteria, selectionArgs)
+            }
+
+            else -> throw IllegalStateException("error on delete unknown uri: $uri")
         }
-        if(rowAffected > 0) {
+        if (rowAffected > 0) {
             Log.d(TAG, "delete: observer call $uri")
-            context?.contentResolver?.notifyChange(uri, null)
+            context.contentResolver?.notifyChange(uri, null)
         }
         return rowAffected
     }
@@ -180,42 +193,49 @@ class AppProvider : ContentProvider() {
         Log.d(TAG, "update: start update uri: $uri")
         val match = uriMatcher.match(uri)
         var selectionCriteria: String
-        var rowAffected = -1
-        context?.let { context ->
-            val db = AppDatabase.getInstance(context).writableDatabase
-            when (match) {
-                TASKS -> {
-                    rowAffected = db.update(TasksContract.TABLE_NAME, values, selection, selectionArgs)
-                }
-
-                TASKS_ID -> {
-                    selectionCriteria = "${TasksContract.Columns.ID} = ${TasksContract.getId(uri)}"
-                    selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
-                    rowAffected = db.update(
-                        TasksContract.TABLE_NAME, values, selectionCriteria, selectionArgs
-                    )
-                }
-
-                TIMINGS -> {
-                    return db.update(TimingsContract.TABLE_NAME, values, selection, selectionArgs)
-                }
-
-                TIMINGS_ID -> {
-                    selectionCriteria =
-                        "${TimingsContract.Columns.ID} = ${TimingsContract.getId(uri)}"
-                    selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
-                    Log.d(TAG, "update: slectioncriteria: $selectionCriteria")
-                    return db.update(
-                        TimingsContract.TABLE_NAME, values, selectionCriteria, selectionArgs
-                    )
-                }
-
-                else -> throw IllegalStateException("error on update unknown uri: $uri")
+        val rowAffected: Int
+        val context = context!!
+        val db = AppDatabase.getInstance(context).writableDatabase
+        when (match) {
+            TASKS -> {
+                rowAffected = db.update(TasksContract.TABLE_NAME, values, selection, selectionArgs)
             }
+
+            TASKS_ID -> {
+                selectionCriteria = "${TasksContract.Columns.ID} = ${TasksContract.getId(uri)}"
+                selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                rowAffected = db.update(
+                    TasksContract.TABLE_NAME, values, selectionCriteria, selectionArgs
+                )
+            }
+
+            TIMINGS -> {
+                rowAffected = db.update(TimingsContract.TABLE_NAME, values, selection, selectionArgs)
+            }
+
+            TIMINGS_ID -> {
+                selectionCriteria = "${TimingsContract.Columns.ID} = ${TimingsContract.getId(uri)}"
+                selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                Log.d(TAG, "update: slectioncriteria: $selectionCriteria")
+                rowAffected = db.update(
+                    TimingsContract.TABLE_NAME, values, selectionCriteria, selectionArgs
+                )
+            }
+            PARAMETER_ID -> {
+                val id = ParametersContract.getId(uri)
+                selectionCriteria = "${ParametersContract.Column.ID} = $id"
+                selection?.let { if (it.isNotEmpty()) selectionCriteria += "AND $it" }
+                Log.d(TAG, "update: slectioncriteria: $selectionCriteria")
+                rowAffected = db.update(
+                    ParametersContract.TABLE_NAME, values, selectionCriteria, selectionArgs
+                )
+            }
+
+            else -> throw IllegalStateException("error on update unknown uri: $uri")
         }
-        if (rowAffected > 0){
+        if (rowAffected > 0) {
             Log.d(TAG, "insert: observer call $uri")
-            context?.contentResolver?.notifyChange(uri,null)
+            context.contentResolver?.notifyChange(uri, null)
         }
         return rowAffected
     }

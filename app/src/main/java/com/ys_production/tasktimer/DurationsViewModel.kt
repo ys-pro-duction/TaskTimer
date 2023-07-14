@@ -15,9 +15,8 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import kotlinx.coroutines.CoroutineScope
+import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import java.util.Date
 import java.util.GregorianCalendar
@@ -30,7 +29,7 @@ private const val TAG = "DurationsViewModel"
 
 class DurationsViewModel(application: Application) : AndroidViewModel(application) {
     private var _displayWeek = true
-    val displayWeek: Boolean get() = _displayWeek
+    val displayWeek get() = _displayWeek
     private val databaseCursor = MutableLiveData<Cursor?>()
     val cursor: LiveData<Cursor?> get() = databaseCursor
     private var calendar = GregorianCalendar()
@@ -49,7 +48,7 @@ class DurationsViewModel(application: Application) : AndroidViewModel(applicatio
             loadData()
         }
     }
-    val broadCastReceiver = object : BroadcastReceiver() {
+    private val broadCastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val action = intent?.action
             if (action == Intent.ACTION_TIMEZONE_CHANGED || action == Intent.ACTION_LOCALE_CHANGED) {
@@ -70,16 +69,17 @@ class DurationsViewModel(application: Application) : AndroidViewModel(applicatio
     private var _firstDayOfWeek =
         settings.getInt(SETTINGS_FIRST_DAY_OF_WEEK, calendar.firstDayOfWeek)
     val firstDayOfWeek get() = _firstDayOfWeek
-    private val settingsListener = SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
-        when(key){
-            SETTINGS_FIRST_DAY_OF_WEEK -> {
-                _firstDayOfWeek = sharedPreferences.getInt(key,calendar.firstDayOfWeek)
-                calendar.firstDayOfWeek = firstDayOfWeek
-                Log.d(TAG, "settingsListener: firstDayOfWeek: $_firstDayOfWeek $firstDayOfWeek")
-                applyFilter()
+    private val settingsListener =
+        SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
+            when (key) {
+                SETTINGS_FIRST_DAY_OF_WEEK -> {
+                    _firstDayOfWeek = sharedPreferences.getInt(key, calendar.firstDayOfWeek)
+                    calendar.firstDayOfWeek = firstDayOfWeek
+                    Log.d(TAG, "settingsListener: firstDayOfWeek: $_firstDayOfWeek $firstDayOfWeek")
+                    applyFilter()
+                }
             }
         }
-    }
 
     init {
         Log.d(TAG, "DVM init: $SETTINGS_FIRST_DAY_OF_WEEK: $firstDayOfWeek")
@@ -90,6 +90,9 @@ class DurationsViewModel(application: Application) : AndroidViewModel(applicatio
             registerReceiver(broadCastReceiver, intentFilter)
             contentResolver.registerContentObserver(
                 TimingsContract.CONTENT_URI, true, cursorObserver
+            )
+            contentResolver.registerContentObserver(
+                ParametersContract.CONTENT_URI, true, cursorObserver
             )
         }
         settings.registerOnSharedPreferenceChangeListener(settingsListener)
@@ -105,7 +108,7 @@ class DurationsViewModel(application: Application) : AndroidViewModel(applicatio
             SortColumn.DURATION -> DurationContract.Columns.DURATION
         }
         Log.d(TAG, "loadData: $order")
-        CoroutineScope(Dispatchers.Default).launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val cursor = getApplication<Application>().contentResolver.query(
                 DurationContract.CONTENT_URI, null, selection, // {selection}
                 selectionArgs, // {selectionArgs}
@@ -174,7 +177,7 @@ class DurationsViewModel(application: Application) : AndroidViewModel(applicatio
         val longDate = timeInMillis / 1000
         val selectionArgs = arrayOf(longDate.toString())
         val selection = "${TimingsContract.Columns.TIMING_START_TIME} < ?"
-        GlobalScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             getApplication<Application>().contentResolver.delete(
                 TimingsContract.CONTENT_URI, selection, selectionArgs
             )
@@ -188,5 +191,6 @@ class DurationsViewModel(application: Application) : AndroidViewModel(applicatio
             unregisterReceiver(broadCastReceiver)
         }
         settings.unregisterOnSharedPreferenceChangeListener(settingsListener)
+        databaseCursor.value?.close()
     }
 }

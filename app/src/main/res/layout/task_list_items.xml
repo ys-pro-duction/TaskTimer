@@ -34,17 +34,10 @@
         android:id="@+id/tli_edit_btn"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:layout_constraintBottom_toBottomOf="@+id/tli_delete_btn"
-        app:layout_constraintEnd_toStartOf="@+id/tli_delete_btn"
-        app:layout_constraintTop_toTopOf="@+id/tli_delete_btn"
-        app:srcCompat="@android:drawable/ic_menu_edit" />
-
-    <ImageButton
-        android:id="@+id/tli_delete_btn"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintTop_toTopOf="@+id/tli_title"
-        app:srcCompat="@android:drawable/ic_menu_delete" />
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:srcCompat="@android:drawable/ic_menu_edit" />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -6,14 +6,13 @@ import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 
 private const val databaseName = "TaskTimer.db"
-private const val databaseVersion = 4
+private const val databaseVersion = 5
 private const val TAG = "AppDatabase"
 
 class AppDatabase private constructor(context: Context) :
     SQLiteOpenHelper(context, databaseName, null, databaseVersion) {
     override fun onCreate(db: SQLiteDatabase) {
-        Log.d(TAG, "onCreate: start")
-        /*
+        Log.d(TAG, "onCreate: start")/*
         CREATE TABLE Tasks(_id INTEGER PRIMARY KEY,
         Name TEXT NOT NULL,
         Description TEXT,
@@ -28,6 +27,7 @@ class AppDatabase private constructor(context: Context) :
         addTimingTable(db)
         addCurrentTimingView(db)
         addDurationView(db)
+        parameterView(db)
         Log.d(TAG, "onCreate: SQLiteDatabaseVersion ${db.version}")
         Log.d(TAG, "onCreate: SQLiteDatabasePath ${db.path}")
     }
@@ -39,20 +39,30 @@ class AppDatabase private constructor(context: Context) :
             1 -> {
                 addTimingTable(db)
                 addCurrentTimingView(db)
+                addDurationView(db)
+                parameterView(db)
             }
+
             2 -> {
                 addCurrentTimingView(db)
                 addDurationView(db)
+                parameterView(db)
             }
-            3 -> addDurationView(db)
+
+            3 -> {
+                addDurationView(db)
+                parameterView(db)
+            }
+            4 ->{
+                parameterView(db)
+            }
             else -> {
                 throw IllegalStateException("unknown version $newVersion")
             }
         }
     }
 
-    private fun addTimingTable(db: SQLiteDatabase) {
-        /*
+    private fun addTimingTable(db: SQLiteDatabase) {/*
         CREATE TABLE Timings(_id INTEGER PRIMARY KEY,
         TaskId INTEGER NOT NULL,
         StartTime INTEGER,
@@ -63,8 +73,7 @@ class AppDatabase private constructor(context: Context) :
                  ${TimingsContract.Columns.TIMING_TASK_ID} INTEGER NOT NULL,
                  ${TimingsContract.Columns.TIMING_START_TIME} INTEGER,
                  ${TimingsContract.Columns.TIMING_DURATION} INTEGER);""".replaceIndent()
-        db.execSQL(sqlTiming)
-        /*
+        db.execSQL(sqlTiming)/*
         CREATE TRIGGER Remove_task
         AFTER DELETE ON Tasks
         FOR EACH ROW
@@ -82,8 +91,8 @@ class AppDatabase private constructor(context: Context) :
             END;""".replaceIndent(" ")
         db.execSQL(sqlTrigger)
     }
-    private fun addCurrentTimingView(db: SQLiteDatabase){
-        /*
+
+    private fun addCurrentTimingView(db: SQLiteDatabase) {/*
         CREATE VIEW vwCurrentTiming
         AS SELECT Timings.TaskId,
         Timings._id,
@@ -110,8 +119,8 @@ class AppDatabase private constructor(context: Context) :
         Log.d(TAG, "addCurrentTimingView: $sSQLTimingView")
         db.execSQL(sSQLTimingView)
     }
-    private fun addDurationView(db: SQLiteDatabase){
-        /*
+
+    private fun addDurationView(db: SQLiteDatabase) {/*
          * CREATE VIEW vwTaskDuration AS SELECT
          * Tasks.Name, Tasks.Description, Timings.StartTime,
          * DATE(Timings.StartTime, 'unixepoch','localtime') AS StartDate,
@@ -137,6 +146,56 @@ class AppDatabase private constructor(context: Context) :
         """.trimIndent().replaceIndent("")
         Log.d(TAG, "addDurationView: $sSQL")
         db.execSQL(sSQL)
+    }
+
+    private fun parameterView(db: SQLiteDatabase) {
+        var sSQL = """CREATE TABLE ${ParametersContract.TABLE_NAME}
+            (${ParametersContract.Column.ID} INTEGER PRIMARY KEY NOT NULL,
+            ${ParametersContract.Column.VALUE} INTEGER NOT NULL);
+        """.trimIndent().replaceIndent(" ")
+        Log.d(TAG, "parameterView: sql : $sSQL")
+        db.execSQL(sSQL)
+
+        sSQL = "DROP VIEW IF EXISTS ${DurationContract.TABLE_NAME}"
+        Log.d(TAG, "parameterView: $sSQL")
+        db.execSQL(sSQL)
+        /*
+        CREATE VIEW vwTaskDurations AS SELECT Tasks.Name, Tasks.Description, Timings.StartTime,
+        DATE(Timings.StartTime, 'unixepoch', 'localtime') AS StartDate,
+        SUM(Timings.Duration) AS Duration
+        FROM Tasks INNER JOIN Timings
+        ON Tasks._id = Timings.TaskId
+        WHERE Timings.Duration > (SELECT Parameters.Value FROM Parameters WHERE Parameters._id = 1)
+        GROUP BY Tasks._id,
+        StartDate;*/
+        sSQL = """CREATE VIEW ${DurationContract.TABLE_NAME}
+            AS SELECT ${TasksContract.TABLE_NAME}.${TasksContract.Columns.TASK_NAME},
+            ${TasksContract.TABLE_NAME}.${TasksContract.Columns.TASK_DESCRIPTION},
+            ${TimingsContract.TABLE_NAME}.${TimingsContract.Columns.TIMING_START_TIME},
+            DATE(${TimingsContract.TABLE_NAME}.${TimingsContract.Columns.TIMING_START_TIME}, 'unixepoch', 'localtime')
+            AS ${DurationContract.Columns.START_DATE},
+            SUM(${TimingsContract.TABLE_NAME}.${TimingsContract.Columns.TIMING_DURATION})
+            AS ${DurationContract.Columns.DURATION}
+            FROM ${TasksContract.TABLE_NAME} INNER JOIN ${TimingsContract.TABLE_NAME}
+            ON ${TasksContract.TABLE_NAME}.${TasksContract.Columns.ID} = 
+            ${TimingsContract.TABLE_NAME}.${TimingsContract.Columns.TIMING_TASK_ID}
+            WHERE ${TimingsContract.TABLE_NAME}.${TimingsContract.Columns.TIMING_DURATION} >
+            (SELECT ${ParametersContract.TABLE_NAME}.${ParametersContract.Column.VALUE}
+            FROM ${ParametersContract.TABLE_NAME}
+            WHERE ${ParametersContract.TABLE_NAME}.${ParametersContract.Column.ID} = ${ParametersContract.ID_SHORT_TIMING})
+            GROUP BY ${TasksContract.TABLE_NAME}.${TasksContract.Columns.ID},
+            ${DurationContract.Columns.START_DATE};
+        """.trimMargin().replaceIndent(" ")
+        Log.d(TAG, "parameterView: $sSQL")
+        db.execSQL(sSQL)
+
+        sSQL =
+            """INSERT INTO ${ParametersContract.TABLE_NAME} VALUES(${ParametersContract.ID_SHORT_TIMING}, 0);""".replaceIndent(
+                    " "
+                )
+        Log.d(TAG, "parameterView: $sSQL")
+        db.execSQL(sSQL)
+
     }
 
     companion object : SingletonHolder<AppDatabase, Context>(::AppDatabase)

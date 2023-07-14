@@ -13,13 +13,14 @@ import androidx.recyclerview.widget.RecyclerView
 import java.util.Locale
 
 class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-    val name = view.findViewById<TextView>(R.id.td_task_name)
+    val name: TextView = view.findViewById(R.id.td_task_name)
     val description: TextView? = view.findViewById(R.id.td_task_description) as TextView?
-    val startTime = view.findViewById<TextView>(R.id.td_start_time)
-    val duration = view.findViewById<TextView>(R.id.td_task_duration)
+    val startTime: TextView = view.findViewById(R.id.td_start_time)
+    val duration: TextView = view.findViewById(R.id.td_task_duration)
 }
 
 private const val TAG = "DurationRVAdapter"
+
 class DurationRVAdapter(context: Context, private var cursor: Cursor?) :
     RecyclerView.Adapter<ViewHolder>() {
     private val dateFormat = DateFormat.getDateFormat(context)

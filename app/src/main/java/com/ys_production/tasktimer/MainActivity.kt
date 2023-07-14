@@ -9,6 +9,7 @@ import android.view.Menu
 import android.view.MenuItem
 import android.view.View
 import android.widget.TextView
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.res.ResourcesCompat
 import androidx.fragment.app.Fragment
@@ -20,6 +21,7 @@ private const val TAG = "MainActivity"
 class MainActivity : AppCompatActivity(), AddEditFragment.OnSaveClicked,
     MainActivityFragment.OnTaskEdit {
     private lateinit var binding: ActivityMainBinding
+    private val viewModel: TaskTimerViewModel by viewModels()
     private var mTowPane = false
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,22 +37,17 @@ class MainActivity : AppCompatActivity(), AddEditFragment.OnSaveClicked,
                 if (mTowPane) View.INVISIBLE else View.GONE
             findViewById<View>(R.id.mainFragment).visibility = View.VISIBLE
         }
-        val appDatabase = AppDatabase.getInstance(this)
-        val db = appDatabase.readableDatabase
+        viewModel.optionsMenu.observe(this){
+            invalidateOptionsMenu()
+        }
     }
 
     override fun onBackPressed() {
         val fragment = supportFragmentManager.findFragmentById(R.id.task_detail_container)
         if (fragment == null || mTowPane) super.onBackPressed()
         else {
-            goBack(fragment)
+            removeEditPane(fragment)
         }
-    }
-
-    private fun goBack(fragment: Fragment) {
-        removeEditPane(fragment)
-        findViewById<View>(R.id.task_detail_container).visibility = View.GONE
-        findViewById<View>(R.id.mainFragment).visibility = View.VISIBLE
     }
 
     private fun showEditPane() {
@@ -80,6 +77,9 @@ class MainActivity : AppCompatActivity(), AddEditFragment.OnSaveClicked,
         if (BuildConfig.DEBUG) {
             menu.findItem(R.id.generate_testdate).isVisible = true
         }
+        if (viewModel.optionsMenu.value != true){
+            menu.clear()
+        }
         return true
     }
 
@@ -90,12 +90,13 @@ class MainActivity : AppCompatActivity(), AddEditFragment.OnSaveClicked,
                 showSettingsDialog()
             }
 
-            R.id.duration_report ->{
-                startActivity(Intent(this,DurationsReport::class.java))
+            R.id.duration_report -> {
+                startActivity(Intent(this, DurationsReport::class.java))
             }
+
             android.R.id.home -> {
                 supportFragmentManager.findFragmentById(R.id.task_detail_container)
-                    ?.let { goBack(it) }
+                    ?.let { removeEditPane(it) }
             }
 
             R.id.about_menu -> {
@@ -117,9 +118,9 @@ class MainActivity : AppCompatActivity(), AddEditFragment.OnSaveClicked,
             setTitle("About")
             setIcon(ResourcesCompat.getDrawable(resources, R.mipmap.ic_launcher, null))
             setView(layoutInflater.inflate(R.layout.about_dialog, null, false).apply {
-                    this.findViewById<TextView>(R.id.about_dialog_version_txt).text =
-                        BuildConfig.VERSION_NAME
-                })
+                this.findViewById<TextView>(R.id.about_dialog_version_txt).text =
+                    BuildConfig.VERSION_NAME
+            })
             create().show()
         }
     }

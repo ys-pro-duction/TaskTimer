@@ -8,9 +8,9 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.DatePicker
 import android.widget.TextView
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import java.text.DateFormat
@@ -23,7 +23,7 @@ const val DIALOG_DELETE = 2
 class DurationsReport : AppCompatActivity(), View.OnClickListener,
     DatePickerDialog.OnDateSetListener {
     private val reportAdapter by lazy { DurationRVAdapter(this, null) }
-    private val viewModel by lazy { ViewModelProvider(this)[DurationsViewModel::class.java] }
+    private val viewModel: DurationsViewModel by viewModels()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_durations_report)
@@ -53,8 +53,7 @@ class DurationsReport : AppCompatActivity(), View.OnClickListener,
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        val id = item.itemId
-        when (id) {
+        when (item.itemId) {
             R.id.rm_filter_period -> {
                 viewModel.toggleDisplayWeek()
                 invalidateMenu()
@@ -70,9 +69,10 @@ class DurationsReport : AppCompatActivity(), View.OnClickListener,
                 showDatePickerFragment(getString(R.string.date_title_delete), DIALOG_DELETE)
                 return true
             }
+
             R.id.rm_change_settings -> {
                 val sd = SettingsDialog()
-                sd.show(supportFragmentManager,"settings")
+                sd.show(supportFragmentManager, "settings")
             }
 
         }
@@ -101,7 +101,7 @@ class DurationsReport : AppCompatActivity(), View.OnClickListener,
         arguments.putInt(DATE_PICKER_ID, id)
         arguments.putString(DATE_PICKER_TITLE, title)
         arguments.putSerializable(DATE_PICKER_DATE, viewModel.getFilterDate())
-        arguments.putInt(DATE_PICKER_FDOW,viewModel.firstDayOfWeek)
+        arguments.putInt(DATE_PICKER_FDOW, viewModel.firstDayOfWeek)
         val dialog = DatePickerFragment()
         dialog.arguments = arguments
         dialog.show(supportFragmentManager, "datePicker")
@@ -109,8 +109,7 @@ class DurationsReport : AppCompatActivity(), View.OnClickListener,
 
     override fun onDateSet(view: DatePicker, year: Int, month: Int, dayOfMonth: Int) {
         Log.d(TAG, "onDateSet: start")
-        val dialogId = view.tag
-        when (dialogId) {
+        when (val dialogId = view.tag) {
             DIALOG_FILTER -> {
                 viewModel.setReportDate(year, month, dayOfMonth)
             }
@@ -119,8 +118,7 @@ class DurationsReport : AppCompatActivity(), View.OnClickListener,
                 val cal = GregorianCalendar()
                 cal.set(year, month, dayOfMonth, 0, 0, 0)
                 val fromDate = DateFormat.getDateInstance().format(cal.timeInMillis)
-                AlertDialog.Builder(this)
-                    .setTitle(getString(R.string.delete_ask_title))
+                AlertDialog.Builder(this).setTitle(getString(R.string.delete_ask_title))
                     .setMessage(getString(R.string.delete_ask_message, fromDate))
                     .setPositiveButton("Delete") { _, _ ->
                         viewModel.deleteRecord(cal.timeInMillis)
@@ -132,8 +130,4 @@ class DurationsReport : AppCompatActivity(), View.OnClickListener,
             else -> throw TypeNotPresentException("dialogId", Throwable("dialogid is $dialogId"))
         }
     }
-//    override fun onDestroy() {
-//        reportAdapter.swapCursor(null)?.close()
-//        super.onDestroy()
-//    }
 }
